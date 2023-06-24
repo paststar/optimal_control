@@ -1,4 +1,8 @@
 */.ipynb_checkpoints
 .vscode
 */__pycache__
+__pycache__
 *.pickle
+*.bin
+*.
+results/*
