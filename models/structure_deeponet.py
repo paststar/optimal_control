@@ -50,8 +50,6 @@ class deeponet(nn.Module):
         self.branch_list.append(nn.Linear(width_branch,num_basis*output_dim))
         self.branch_list = nn.Sequential(*self.branch_list)
         
-
-        
     def forward(self, data_grid, data_sensor):
         coeff=self.branch_list(data_sensor).reshape(-1,self.output_dim,self.num_basis)
         basis=self.trunk_list(data_grid).reshape(-1,1,self.num_basis).repeat(1,self.output_dim,1)

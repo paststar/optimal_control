@@ -86,10 +86,12 @@ if __name__=="__main__":
         args.gpu_idx = 0
         args.batch = 20000
         args.epochs = 20000
+        #args.lr = 0.01
         args.n_sensor = 121
         args.d_out = 2
         args.d_in = 1
         loss_type = 'mse' # mse or rel
+        lam = 30
 
     #shutil.copy(sys.argv[0], os.path.join(PATH, 'code.py'))
     # Set seed
@@ -192,7 +194,7 @@ if __name__=="__main__":
 
             S_loss=loss_func(predict[:,0],y[:,0])
             I_loss=loss_func(predict[:,1],y[:,1])
-            loss = S_loss+I_loss
+            loss = S_loss+lam*I_loss
             #zero gradients, backward pass, and update weights
             optimizer.zero_grad()
             loss.backward()
@@ -210,7 +212,7 @@ if __name__=="__main__":
                 predict=model(x[:,num_sensor:],x[:,:num_sensor])
                 S_loss=loss_func(predict[:,0],y[:,0])
                 I_loss=loss_func(predict[:,1],y[:,1])   
-                error_test = S_loss+I_loss
+                error_test = S_loss+lam*I_loss
                 test_loss.update(error_test.item(), y.shape[0])
                 #print(predict.shape,y.shape)
                 #print(predict.reshape(-1,args.n_sensor,2).shape,y.reshape(-1,args.n_sensor,2).shape)

@@ -68,7 +68,7 @@ def mse_loss(approx, real):
     return torch.mean((approx-real)**2)
 
 def rel_loss(approx, real):
-    return torch.mean(torch.abs(approx-real)/real)
+    return torch.mean(torch.abs(approx-real)/(torch.abs(real)+1e-8))
         
 def rel_mse_error(approx, real):
     return torch.sum((approx-real)**2)/torch.sum((real)**2)
