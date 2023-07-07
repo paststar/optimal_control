@@ -1,10 +1,3 @@
-'''
-(완) 1. T = 30으로 변경 + interpolation으로 데이터 획득
-2. phase 1 : 복원 loss + 상대 오차 추가
-3. pahse2를 교수님이 새로 보내주신 논문 3.8식(가운데 w2, w3 부분 적분)을 참고 or solving pde 논문대로 해보기
-4. 결과가 (교수님이 주신)논문처럼 t=3~4까지 감소하다가 거의 0이되면 성공?
-'''
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -92,7 +85,6 @@ if __name__=="__main__":
         args.d_in = 1
         loss_type = 'mse' # mse or rel
         lam = 30
-
     #shutil.copy(sys.argv[0], os.path.join(PATH, 'code.py'))
     # Set seed
     torch.manual_seed(args.seed)
