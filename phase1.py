@@ -4,7 +4,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 from torchsummary import summary
-
 import numpy as np
 
 import os
@@ -16,7 +15,6 @@ import argparse
 import pickle
 
 from utils import *
-
 
 def get_args(argv=None):
     parser = argparse.ArgumentParser(description = 'Put your hyperparameters')
@@ -53,6 +51,7 @@ def get_args(argv=None):
     parser.add_argument('--chunk_out', default=100, type=int, help='number of outputs for one chunk')
 
     parser.add_argument('--custom',action="store_true")
+    parser.add_argument('--rec',action="store_true")
     return parser.parse_args(argv)
 
 if __name__=="__main__":
@@ -61,20 +60,23 @@ if __name__=="__main__":
     NAME = args.name
     CUSTOM = args.custom
     PATH = 'results/'
+    REC = args.rec
     #print(sys.argv) # input 체크
+    print(args.load_path)
+    print(args)
 
     if args.load_path is None:
         PATH = os.path.join(PATH, NAME)
         os.makedirs(PATH,exist_ok=True)
     else:
-        #PATH = args.load_path
-        args = torch.load(os.path.join(args.load_path, 'args.bin'))
+        args = torch.load(os.path.join(args.load_path, "args.bin"))
         args.name = NAME
         PATH = os.path.join(PATH, NAME)
         os.makedirs(PATH,exist_ok=True)
     
+    # shutil.copy(sys.argv[0], os.path.join(PATH, 'code.py'))
     if CUSTOM:
-        args.data = 'SIR_v2'
+        args.data = "SIR_v2" # "SIR_v2" or "SIR_v3"
         args.multgpu = False
         args.gpu_idx = 0
         args.batch = 20000
@@ -83,10 +85,14 @@ if __name__=="__main__":
         args.n_sensor = 121
         args.d_out = 2
         args.d_in = 1
-        loss_type = 'mse' # mse or rel
+        loss_type = "mse" # mse or rel
         lam = 30
-    #shutil.copy(sys.argv[0], os.path.join(PATH, 'code.py'))
-    # Set seed
+    if REC:
+        args.data += "_rec"
+        args.d_out += 1
+        lam2 = 1
+
+    ## Set seed
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
@@ -106,15 +112,6 @@ if __name__=="__main__":
     schedule_step_size = args.step_size
     schedule_gamma = args.gamma
     num_sensor = args.n_sensor
-    #d_in = args.d_in
-    #d_out = args.d_out
-    #d_target = args.d_target
-    #w_target = args.w_target
-    #a_target = args.a_target
-    #d_hyper = args.d_hyper
-    #w_hyper = args.w_hyper
-    #a_hyper = args.a_hyper
-    #num_basis = args.n_basis
 
     torch.save(args, os.path.join(PATH, 'args.bin'))
     print(args)
@@ -170,23 +167,29 @@ if __name__=="__main__":
     os.makedirs(os.path.join(PATH, 'weights'),exist_ok=True)
     
     ## model trianing
-    train_losses, train_losses_S, train_losses_I=[],[],[]
-    test_losses=[]  
-    test_rels_S, test_rels_I=[], []
+    train_losses, train_losses_S, train_losses_I, train_losses_rec = [], [], [], []
+    test_losses, test_rels_S, test_rels_I, test_rels_rec = [], [], [], []
     pbar = tqdm(total=epochs, file=sys.stdout)
     for epoch in tqdm(range(1,epochs+1)):
         ### train ###
         model.train()
-        train_loss, train_loss_S, train_loss_I=AverageMeter(),AverageMeter(),AverageMeter()
-        test_loss=AverageMeter()
-        test_rel_S,test_rel_I=AverageMeter(), AverageMeter()
+        train_loss, train_loss_S, train_loss_I, train_loss_rec = AverageMeter(), AverageMeter(), AverageMeter(), AverageMeter()
+        test_loss = AverageMeter()
+        test_rel_S, test_rel_I, test_rel_rec = AverageMeter(), AverageMeter(), AverageMeter()
+
         for batch in train_loader:
             x,y=batch
             predict = model(x[:,num_sensor:],x[:,:num_sensor])
 
-            S_loss=loss_func(predict[:,0],y[:,0])
-            I_loss=loss_func(predict[:,1],y[:,1])
+            S_loss = loss_func(predict[:,0],y[:,0])
+            I_loss = loss_func(predict[:,1],y[:,1])
             loss = S_loss+lam*I_loss
+
+            if REC:
+                rec_loss = loss_func(predict[:,2],y[:,2])
+                loss += lam2*rec_loss
+                train_loss_rec.update(rec_loss.item(), y.shape[0])
+                
             #zero gradients, backward pass, and update weights
             optimizer.zero_grad()
             loss.backward()
@@ -195,7 +198,7 @@ if __name__=="__main__":
             train_loss.update(loss.item(), y.shape[0])
             train_loss_S.update(S_loss.item(), y.shape[0])
             train_loss_I.update(I_loss.item(), y.shape[0])
-        
+
         ### validation ###
         model.eval()
         with torch.no_grad():
@@ -203,34 +206,42 @@ if __name__=="__main__":
                 x,y=batch
                 predict=model(x[:,num_sensor:],x[:,:num_sensor])
                 S_loss=loss_func(predict[:,0],y[:,0])
-                I_loss=loss_func(predict[:,1],y[:,1])   
+                I_loss=loss_func(predict[:,1],y[:,1])
                 error_test = S_loss+lam*I_loss
+
+                if REC:
+                    rec_loss = loss_func(predict[:,2],y[:,2])
+                    error_test += lam2*rec_loss
                 test_loss.update(error_test.item(), y.shape[0])
                 #print(predict.shape,y.shape)
                 #print(predict.reshape(-1,args.n_sensor,2).shape,y.reshape(-1,args.n_sensor,2).shape)
-                for prediction, real in zip(predict.reshape(-1,args.n_sensor,2),y.reshape(-1,args.n_sensor,2)):
+                for prediction, real in zip(predict.reshape(-1,args.n_sensor,args.d_out),y.reshape(-1,args.n_sensor,args.d_out)):
                     test_rel_S.update(rel_L2_error(prediction[:,0],real[:,0]), 1) # 함수 1개에 대한 상대 오차 계산
                     test_rel_I.update(rel_L2_error(prediction[:,1],real[:,1]), 1)
+                    if REC:
+                        test_rel_rec.update(rel_L2_error(prediction[:,2],real[:,2]), 1)
+
 
         train_losses.append(train_loss.avg)
         train_losses_S.append(train_loss_S.avg)
         train_losses_I.append(train_loss_I.avg)
+        train_losses_rec.append(train_loss_rec.avg)
 
         test_losses.append(test_loss.avg)
         test_rels_S.append(test_rel_S.avg)
         test_rels_I.append(test_rel_I.avg)
+        test_rels_rec.append(test_rel_rec.avg)
 
-
-        pbar.set_description("[Epoch : %d] Loss_train_S : %.5f, Loss_train_I : %.5f, Loss_train : %.5f, Loss_test : %.5f, rel_test_S : %.5f, rel_test_I : %.5f "%(epoch, train_losses_S[-1],train_losses_I[-1],train_losses[-1], test_losses[-1], test_rels_S[-1], test_rels_I[-1]))
-        if scheduler_type!=None:
+        pbar.set_description("[Epoch : %d] Loss_train_S : %.5f, Loss_train_I : %.5f, Loss_rec : %.5f, Loss_train : %.5f, Loss_test : %.5f, rel_test_S : %.5f, rel_test_I : %.5f, rel_rec : %.5f" % (
+            epoch, train_losses_S[-1], train_losses_I[-1], train_losses_rec[-1], train_losses[-1], test_losses[-1], test_rels_S[-1], test_rels_I[-1], test_rels_rec[-1]))
+        if scheduler_type != None:
             scheduler.step()
         pbar.update()
         
-        if epoch%1000==0:
-            torch.save(model.state_dict(),os.path.join(PATH, 'weight_epoch_{}.bin'.format(epoch)))
-
-            torch.save(model.state_dict(),os.path.join(PATH, 'weight.bin'))
-            torch.save({'train_loss':train_losses,'train_loss_S':train_losses_S,'train_loss_I':train_losses_I, 'test_loss':test_losses, 'rel_test_S':test_rels_S, 'rel_test_I':test_rels_I}, os.path.join(PATH, 'loss.bin'))
-            torch.save({'epoch':epoch,
-                        'optimizer':optimizer.state_dict(),
-                        'scheduler':scheduler.state_dict()}, os.path.join(PATH, 'checkpoint.bin'))
+        if epoch % 1000 == 0:
+            torch.save(model.state_dict(), os.path.join(
+                PATH, 'weight_epoch_{}.bin'.format(epoch)))
+            torch.save(model.state_dict(), os.path.join(PATH, 'weight.bin'))
+            torch.save({'train_loss': train_losses, 'train_loss_S': train_losses_S, 'train_loss_I': train_losses_I, 'train_loss_rec' : train_loss_rec,
+                        'test_loss': test_losses, 'rel_test_S': test_rels_S, 'rel_test_I': test_rels_I, 'rel_test_rec' : test_rels_rec}, os.path.join(PATH, 'loss.bin'))
+            torch.save({'epoch': epoch,'optimizer': optimizer.state_dict(),'scheduler': scheduler.state_dict()}, os.path.join(PATH, 'checkpoint.bin'))
