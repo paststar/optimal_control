@@ -76,13 +76,15 @@ if __name__=="__main__":
     
     # shutil.copy(sys.argv[0], os.path.join(PATH, 'code.py'))
     if CUSTOM:
-        args.data = "SIR_v2" # "SIR_v2" or "SIR_v3"
+        args.data = "SIR_v3" # "SIR_v2"
+        interp_M = 31
         args.multgpu = False
         args.gpu_idx = 0
         args.batch = 20000
         args.epochs = 20000
         #args.lr = 0.01
         args.n_sensor = 121
+        #args.n_sensor = 50
         args.d_out = 2
         args.d_in = 1
         loss_type = "mse" # mse or rel
@@ -91,6 +93,7 @@ if __name__=="__main__":
         args.data += "_rec"
         args.d_out += 1
         lam2 = 1
+        #args.lr = 0.001
 
     ## Set seed
     torch.manual_seed(args.seed)
@@ -139,7 +142,8 @@ if __name__=="__main__":
         N_train=100
     else:
         N_train=1000
-    data_name=args.data+'_N'+str(N_train)+'_M'+str(num_sensor)+'.pickle'
+    data_name=args.data+'_N'+str(N_train)+'_M'+str(num_sensor)+'_int'+str(interp_M)+'.pickle'
+    #data_name = "identity_N1000_M50.pickle"
     with open("./data_generation/"+data_name,"rb") as fr:
         raw_set= pickle.load(fr)
     train_dataset = TensorDataset(raw_set['train_X'].cuda().float(), raw_set['train_Y'].cuda().float())
@@ -181,13 +185,14 @@ if __name__=="__main__":
             x,y=batch
             predict = model(x[:,num_sensor:],x[:,:num_sensor])
 
-            S_loss = loss_func(predict[:,0],y[:,0])
-            I_loss = loss_func(predict[:,1],y[:,1])
-            loss = S_loss+lam*I_loss
+            #S_loss = loss_func(predict[:,0],y[:,0])
+            #I_loss = loss_func(predict[:,1],y[:,1])
+            #loss = S_loss+lam*I_loss
 
             if REC:
                 rec_loss = loss_func(predict[:,2],y[:,2])
-                loss += lam2*rec_loss
+                #loss += lam2*rec_loss
+                loss = lam2*rec_loss
                 train_loss_rec.update(rec_loss.item(), y.shape[0])
                 
             #zero gradients, backward pass, and update weights
@@ -196,8 +201,8 @@ if __name__=="__main__":
             optimizer.step()
 
             train_loss.update(loss.item(), y.shape[0])
-            train_loss_S.update(S_loss.item(), y.shape[0])
-            train_loss_I.update(I_loss.item(), y.shape[0])
+            #train_loss_S.update(S_loss.item(), y.shape[0])
+            #train_loss_I.update(I_loss.item(), y.shape[0])
 
         ### validation ###
         model.eval()
@@ -242,6 +247,6 @@ if __name__=="__main__":
             torch.save(model.state_dict(), os.path.join(
                 PATH, 'weight_epoch_{}.bin'.format(epoch)))
             torch.save(model.state_dict(), os.path.join(PATH, 'weight.bin'))
-            torch.save({'train_loss': train_losses, 'train_loss_S': train_losses_S, 'train_loss_I': train_losses_I, 'train_loss_rec' : train_loss_rec,
+            torch.save({'train_loss': train_losses, 'train_loss_S': train_losses_S, 'train_loss_I': train_losses_I, 'train_loss_rec' : train_losses_rec,
                         'test_loss': test_losses, 'rel_test_S': test_rels_S, 'rel_test_I': test_rels_I, 'rel_test_rec' : test_rels_rec}, os.path.join(PATH, 'loss.bin'))
             torch.save({'epoch': epoch,'optimizer': optimizer.state_dict(),'scheduler': scheduler.state_dict()}, os.path.join(PATH, 'checkpoint.bin'))
