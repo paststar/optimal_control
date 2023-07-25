@@ -52,6 +52,7 @@ def get_args(argv=None):
 
     parser.add_argument('--custom',action="store_true")
     parser.add_argument('--rec',action="store_true")
+    parser.add_argument('--interp',type=int)
     return parser.parse_args(argv)
 
 if __name__=="__main__":
@@ -61,6 +62,7 @@ if __name__=="__main__":
     CUSTOM = args.custom
     PATH = 'results/'
     REC = args.rec
+    interp = args.interp
     #print(sys.argv) # input 체크
     print(args.load_path)
     print(args)
@@ -77,7 +79,6 @@ if __name__=="__main__":
     # shutil.copy(sys.argv[0], os.path.join(PATH, 'code.py'))
     if CUSTOM:
         args.data = "SIR_v3" # "SIR_v2"
-        interp_M = 31
         args.multgpu = False
         args.gpu_idx = 0
         args.batch = 20000
@@ -92,7 +93,7 @@ if __name__=="__main__":
     if REC:
         args.data += "_rec"
         args.d_out += 1
-        lam2 = 1
+        lam2 = 300
         #args.lr = 0.001
 
     ## Set seed
@@ -142,7 +143,7 @@ if __name__=="__main__":
         N_train=100
     else:
         N_train=1000
-    data_name=args.data+'_N'+str(N_train)+'_M'+str(num_sensor)+'_int'+str(interp_M)+'.pickle'
+    data_name=args.data+'_N'+str(N_train)+'_M'+str(num_sensor)+'_int'+str(interp)+'.pickle'
     #data_name = "identity_N1000_M50.pickle"
     with open("./data_generation/"+data_name,"rb") as fr:
         raw_set= pickle.load(fr)
@@ -185,14 +186,14 @@ if __name__=="__main__":
             x,y=batch
             predict = model(x[:,num_sensor:],x[:,:num_sensor])
 
-            #S_loss = loss_func(predict[:,0],y[:,0])
-            #I_loss = loss_func(predict[:,1],y[:,1])
-            #loss = S_loss+lam*I_loss
+            S_loss = loss_func(predict[:,0],y[:,0])
+            I_loss = loss_func(predict[:,1],y[:,1])
+            loss = S_loss+lam*I_loss
 
             if REC:
                 rec_loss = loss_func(predict[:,2],y[:,2])
-                #loss += lam2*rec_loss
-                loss = lam2*rec_loss
+                loss += lam2*rec_loss
+                #loss = lam2*rec_loss
                 train_loss_rec.update(rec_loss.item(), y.shape[0])
                 
             #zero gradients, backward pass, and update weights
@@ -201,8 +202,8 @@ if __name__=="__main__":
             optimizer.step()
 
             train_loss.update(loss.item(), y.shape[0])
-            #train_loss_S.update(S_loss.item(), y.shape[0])
-            #train_loss_I.update(I_loss.item(), y.shape[0])
+            train_loss_S.update(S_loss.item(), y.shape[0])
+            train_loss_I.update(I_loss.item(), y.shape[0])
 
         ### validation ###
         model.eval()
@@ -218,8 +219,7 @@ if __name__=="__main__":
                     rec_loss = loss_func(predict[:,2],y[:,2])
                     error_test += lam2*rec_loss
                 test_loss.update(error_test.item(), y.shape[0])
-                #print(predict.shape,y.shape)
-                #print(predict.reshape(-1,args.n_sensor,2).shape,y.reshape(-1,args.n_sensor,2).shape)
+                
                 for prediction, real in zip(predict.reshape(-1,args.n_sensor,args.d_out),y.reshape(-1,args.n_sensor,args.d_out)):
                     test_rel_S.update(rel_L2_error(prediction[:,0],real[:,0]), 1) # 함수 1개에 대한 상대 오차 계산
                     test_rel_I.update(rel_L2_error(prediction[:,1],real[:,1]), 1)
