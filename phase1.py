@@ -78,7 +78,7 @@ if __name__=="__main__":
     
     # shutil.copy(sys.argv[0], os.path.join(PATH, 'code.py'))
     if CUSTOM:
-        args.data = "SIR_v3" # "SIR_v2"
+        args.data = "SIR_v4" # "SIR_v2"
         args.multgpu = False
         args.gpu_idx = 0
         args.batch = 20000
@@ -89,11 +89,11 @@ if __name__=="__main__":
         args.d_out = 2
         args.d_in = 1
         loss_type = "mse" # mse or rel
-        lam = 30
+        #lam = 30
     if REC:
         args.data += "_rec"
         args.d_out += 1
-        lam2 = 300
+        lam = 1
         #args.lr = 0.001
 
     ## Set seed
@@ -188,11 +188,11 @@ if __name__=="__main__":
 
             S_loss = loss_func(predict[:,0],y[:,0])
             I_loss = loss_func(predict[:,1],y[:,1])
-            loss = S_loss+lam*I_loss
+            loss = S_loss+I_loss
 
             if REC:
                 rec_loss = loss_func(predict[:,2],y[:,2])
-                loss += lam2*rec_loss
+                loss += lam*rec_loss
                 #loss = lam2*rec_loss
                 train_loss_rec.update(rec_loss.item(), y.shape[0])
                 
@@ -213,13 +213,13 @@ if __name__=="__main__":
                 predict=model(x[:,num_sensor:],x[:,:num_sensor])
                 S_loss=loss_func(predict[:,0],y[:,0])
                 I_loss=loss_func(predict[:,1],y[:,1])
-                error_test = S_loss+lam*I_loss
+                error_test = S_loss+I_loss
 
                 if REC:
                     rec_loss = loss_func(predict[:,2],y[:,2])
-                    error_test += lam2*rec_loss
+                    error_test += lam*rec_loss
                 test_loss.update(error_test.item(), y.shape[0])
-                
+
                 for prediction, real in zip(predict.reshape(-1,args.n_sensor,args.d_out),y.reshape(-1,args.n_sensor,args.d_out)):
                     test_rel_S.update(rel_L2_error(prediction[:,0],real[:,0]), 1) # 함수 1개에 대한 상대 오차 계산
                     test_rel_I.update(rel_L2_error(prediction[:,1],real[:,1]), 1)
