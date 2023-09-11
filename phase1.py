@@ -78,7 +78,7 @@ if __name__=="__main__":
     
     # shutil.copy(sys.argv[0], os.path.join(PATH, 'code.py'))
     if CUSTOM:
-        args.data = "SIR_v4" # "SIR_v2"
+        args.data = "SIR_v5" # "SIR_v2"
         args.multgpu = False
         args.gpu_idx = 0
         args.batch = 20000
