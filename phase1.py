@@ -52,6 +52,7 @@ def get_args(argv=None):
 
     parser.add_argument('--custom',action="store_true")
     parser.add_argument('--rec',action="store_true")
+    parser.add_argument('--const',action="store_true")
     parser.add_argument('--interp',type=int)
     return parser.parse_args(argv)
 
@@ -62,6 +63,7 @@ if __name__=="__main__":
     CUSTOM = args.custom
     PATH = 'results/'
     REC = args.rec
+    CONST = args.const
     interp = args.interp
     #print(sys.argv) # input 체크
     print(args.load_path)
@@ -131,7 +133,8 @@ if __name__=="__main__":
                     args.n_sensor,
                     args.d_in,
                     args.n_basis,
-                    args.d_out
+                    args.d_out,
+                    CONST
                 ).cuda()
         
     model=model.cuda()

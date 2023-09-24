@@ -1,5 +1,6 @@
-import torch.nn as nn
 import torch
+import torch.nn.functional as F
+import torch.nn as nn
 import numpy as np
 
 __all__ = ['hyperdeeponet', 'chunk_hyperdeeponet']
@@ -34,7 +35,7 @@ class FC_layer(nn.Module):
 
 
 class hyperdeeponet(nn.Module):
-    def __init__(self, depth_trunk, width_trunk, act_trunk, depth_hyper, width_hyper, act_hyper, num_sensor, input_dim, num_basis, output_dim):
+    def __init__(self, depth_trunk, width_trunk, act_trunk, depth_hyper, width_hyper, act_hyper, num_sensor, input_dim, num_basis, output_dim, constraint=False):
         super(hyperdeeponet, self).__init__()
         
         ##trunk net = target net
@@ -78,6 +79,10 @@ class hyperdeeponet(nn.Module):
             self.hyper_list.append(self.activation_hyper)
         self.hyper_list.append(nn.Linear(width_hyper,self.param_size))
         self.hyper_list = nn.Sequential(*self.hyper_list)
+
+        print('constraint :',constraint)
+
+        self.constraint = constraint
         
     def forward(self, data_grid, data_sensor):
         cut=0
@@ -88,12 +93,15 @@ class hyperdeeponet(nn.Module):
             cut+=self.param_sizes[i]
         
         output=self.trunk_list[self.depth_trunk+1](data_grid, weight[...,cut:cut+self.param_sizes[self.depth_trunk+1]])
+
+        if self.constraint:
+            output = F.relu(output)
         return output
 
     
     def get_param(self, data):
         return self.hyper_list(data)
-    
+
     
 class chunk_hyperdeeponet(nn.Module):
     def __init__(self, depth_trunk, width_trunk, act_trunk, depth_hyper, width_hyper, act_hyper, num_sensor, input_dim, num_basis, output_dim, num_chunk_in, num_chunk_out):
